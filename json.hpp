@@ -27,72 +27,70 @@ template <typename T> class json_boolean;
 template <typename T> class json_null;
 
 //通常文字列からJSON文字列へのエスケープ処理
-template <typename T = char>
-inline string json_escape_encode(const string& text) {
-	string json;
+inline string _json_escape_encode(const string& text) {
+	string out = "";
 	for (size_t i = 0; i < text.size(); i++) {
-		switch (json[i]) {
-			case '\"': json += "\\\"";  break;
-			case '\\': json += "\\\\";  break;
-			case '/':  json += "\\/";   break;
-			case '\b': json += "\\b";   break;
-			case '\f': json += "\\f";   break;
-			case '\n': json += "\\n";   break;
-			case '\r': json += "\\r";   break;
-			case '\t': json += "\\t";   break;
-			default:   json += text[i]; break;
+		switch (out[i]) {
+			case '\"': out += "\\\"";  break;
+			case '\\': out += "\\\\";  break;
+			case '/':  out += "\\/";   break;
+			case '\b': out += "\\b";   break;
+			case '\f': out += "\\f";   break;
+			case '\n': out += "\\n";   break;
+			case '\r': out += "\\r";   break;
+			case '\t': out += "\\t";   break;
+			default:   out += text[i]; break;
 		}
 	}
-	return json;
+	return out;
 }
 //JSON文字列から通常文字列へのエスケープ処理
-template <typename T = char>
-inline string json_escape_decode(const string& json, size_t& pos) {
+inline string _json_escape_decode(const string& json, size_t& pos, string& temp) {
 	unsigned long utf32;
-	string text;
+	temp = "";
 	while (pos < json.size()) {
-		if (json[pos] == '\"') { ++pos; return text; }
+		if (json[pos] == '\"') { ++pos; return temp; }
 		else if (json[pos] == '\\') {
 			//エスケープ処理
 			++pos;
-			if (pos >= json.size()) return text;
+			if (pos >= json.size()) return temp;
 			switch (json[pos]) {
-				case '\"': text += '\"'; ++pos; break;
-				case '\\': text += '\\'; ++pos; break;
-				case '/':  text += '/';  ++pos; break;
-				case 'b':  text += '\b'; ++pos; break;
-				case 'f':  text += '\f'; ++pos; break;
-				case 'n':  text += '\n'; ++pos; break;
-				case 'r':  text += '\r'; ++pos; break;
-				case 't':  text += '\t'; ++pos; break;
+				case '\"': temp += '\"'; ++pos; break;
+				case '\\': temp += '\\'; ++pos; break;
+				case '/':  temp += '/';  ++pos; break;
+				case 'b':  temp += '\b'; ++pos; break;
+				case 'f':  temp += '\f'; ++pos; break;
+				case 'n':  temp += '\n'; ++pos; break;
+				case 'r':  temp += '\r'; ++pos; break;
+				case 't':  temp += '\t'; ++pos; break;
 				case 'u':
 					//utf-8に変換
 					++pos;
-					if (pos+4 >= json.size()) return text; //error
+					if (pos+4 >= json.size()) return temp; //error
 					utf32 = stoul(json.substr(pos, 4), nullptr, 16); //unsinged long に変換
 					if (utf32 <= 0x007F) { //1byte
-						text += (char)utf32;
+						temp += (char)utf32;
 					} else if (utf32 >= 0x0080 && utf32 <= 0x07FF) { //2byte
-						text += (char)(0xC0 | ((utf32 & 0x7C0) >> 6));
-						text += (char)(0x80 |  (utf32 & 0x3F));
+						temp += (char)(0xC0 | ((utf32 & 0x7C0) >> 6));
+						temp += (char)(0x80 |  (utf32 & 0x3F));
 					} else if (utf32 >= 0x0800 && utf32 <= 0xFFFF) { //3byte
-						text += (char)(0xE0 | ((utf32 & 0xF000) >> 12));
-						text += (char)(0x80 | ((utf32 & 0xFC0) >> 6));
-						text += (char)(0x80 |  (utf32 & 0x3F));
+						temp += (char)(0xE0 | ((utf32 & 0xF000) >> 12));
+						temp += (char)(0x80 | ((utf32 & 0xFC0) >> 6));
+						temp += (char)(0x80 |  (utf32 & 0x3F));
 					} else if (utf32 >= 0x10000 && utf32 <= 0x1FFFFF) { //4byte
-						text += (char)(0xF0 | ((utf32 & 0x1C0000) >> 18));
-						text += (char)(0x80 | ((utf32 & 0x3F000) >> 12));
-						text += (char)(0x80 | ((utf32 & 0xFC0) >> 6));
-						text += (char)(0x80 |  (utf32 & 0x3F));
-					} else return text; //error 未定義
+						temp += (char)(0xF0 | ((utf32 & 0x1C0000) >> 18));
+						temp += (char)(0x80 | ((utf32 & 0x3F000) >> 12));
+						temp += (char)(0x80 | ((utf32 & 0xFC0) >> 6));
+						temp += (char)(0x80 |  (utf32 & 0x3F));
+					} else return temp; //error 未定義
 					pos += 4;
 					break;
-				default: return text;
+				default: return temp;
 			}
-		} else if (json[pos] >= ' ' || json[pos] < '\a') { text += json[pos]; ++pos; }
-		else return text;
+		} else if (json[pos] >= ' ' || json[pos] < '\a') { temp += json[pos]; ++pos; }
+		else return temp;
 	}
-	return text;
+	return temp;
 }
 
 template <typename T = char>
@@ -142,6 +140,7 @@ class json_object : public json_node<T> {
 	using json_node<T>::set_parent;
 	using json_node<T>::reset_parent;
 
+
 	map<string, json_node<T>**> nodelist;
 	friend class json_array<T>;
 
@@ -169,11 +168,11 @@ public:
 			out += "\n";
 			last = 2;
 			for (auto it : nodelist)
-				if (*it.second != nullptr) out += indenttext + "\"" + json_escape_encode(it.first) + "\" : " + (*it.second)->print(indentstr, indent+1) + ",\n";
+				if (*it.second != nullptr) out += indenttext + "\"" + _json_escape_encode(it.first) + "\" : " + (*it.second)->print(indentstr, indent+1) + ",\n";
 		} else {
 			last = 1;
 			for (auto it : nodelist)
-				if (*it.second != nullptr) out += "\"" + json_escape_encode(it.first) + "\":" + (*it.second)->print(indentstr, -1) + ",";
+				if (*it.second != nullptr) out += "\"" + _json_escape_encode(it.first) + "\":" + (*it.second)->print(indentstr, -1) + ",";
 		}
 		out.erase(out.end() - last);
 		out += indenttext.substr(0, indent * indentstr.size()) + "}";
@@ -358,7 +357,7 @@ public:
 	json_string() { reset_parent(); }
 	json_string(const string& arg) { reset_parent(); v = arg; }
 	~json_string() { if (n_parent != nullptr) *n_parent_pos = nullptr; } //親ノードとの連結を解除
-	string print(const string& indentstr = "\t", const int indent = 0) { return "\"" + json_escape_encode(v) + "\""; }
+	string print(const string& indentstr = "\t", const int indent = 0) { return "\"" + _json_escape_encode(v) + "\""; }
 	json_type type() { return String; }
 	string get_string() { return v; }
 	double get_number() { return stod(v); }
@@ -429,19 +428,18 @@ public:
 	json_type type() { return Null; }
 };
 
-template <typename T = char>
-json_node<T>* json_parse_type(const string& json, size_t& pos) {
-	json_node<T>* node = nullptr;
+inline json_node<>* _json_parse_type(const string& json, size_t& pos, string& e_temp) {
+	json_node<>* node = nullptr;
 	size_t now = 0;
 	int cnt, flag;
-	string str;
+	string temp;
 	while (pos < json.size()) {
 		switch (json[pos]) {
 			case ' ': case '\n': case '\t': //whitespace
 				++pos;
 				break;
 			case '{': //object
-				node = new json_object<T>;
+				node = new json_object<>;
 				++pos; flag = 0; //-1=終了, 0=キーなし, 1=キーあり, 2=ノードあり
 				while (pos < json.size()) {
 					switch (json[pos]) {
@@ -452,14 +450,14 @@ json_node<T>* json_parse_type(const string& json, size_t& pos) {
 							//キー作成
 							if (flag == 0) {
 								++pos; flag = 1;
-								str = json_escape_decode(json, pos);
+								temp = _json_escape_decode(json, pos, e_temp);
 							} else { delete node; return nullptr; }
 							break;
 						case ':':
 							//ノード作成
 							if (flag == 1) {
 								++pos;
-								if (node->set_object(str, json_parse_type<T>(json, pos)) == nullptr) { delete node; return nullptr; } //ノード作成失敗
+								if (node->set_object(temp, _json_parse_type(json, pos, e_temp)) == nullptr) { delete node; return nullptr; } //ノード作成失敗
 								flag = 2;
 							} else { delete node; return nullptr; }
 							break;
@@ -481,7 +479,7 @@ json_node<T>* json_parse_type(const string& json, size_t& pos) {
 				delete node;
 				return nullptr;
 			case '[': //array
-				node = new json_array<T>;
+				node = new json_array<>;
 				++pos; flag = 0; //-1=終了, 0=ノードなし, 1=ノードあり
 				while (pos < json.size()) {
 					switch (json[pos]) {
@@ -501,7 +499,7 @@ json_node<T>* json_parse_type(const string& json, size_t& pos) {
 						default:
 							if (flag == 0) {
 								//ノード作成
-								if (node->add_array(json_parse_type<T>(json, pos)) == nullptr) { delete node; return nullptr; } //ノード作成失敗
+								if (node->add_array(_json_parse_type(json, pos, e_temp)) == nullptr) { delete node; return nullptr; } //ノード作成失敗
 								flag = 1;
 							} else { delete node; return nullptr; }
 							break;
@@ -511,7 +509,7 @@ json_node<T>* json_parse_type(const string& json, size_t& pos) {
 				return nullptr;
 			case '\"': //string
 				++pos;
-				return new json_string<T>(json_escape_decode(json, pos));
+				return new json_string<>(_json_escape_decode(json, pos, e_temp));
 			case '-':
 				//number - (次の文字が数字以外の場合はエラー)
 				if (pos+1 < json.size() && (json[pos+1] < 0x30 || json[pos+1] > 0x39)) return nullptr;
@@ -526,7 +524,7 @@ json_node<T>* json_parse_type(const string& json, size_t& pos) {
 							++now;
 						case ',':
 							//終了
-							node = new json_number<T>( stod( json.substr(pos, now-pos) ) );
+							node = new json_number<>( stod( json.substr(pos, now-pos) ) );
 							pos = now;
 							return node;
 						case 'e':
@@ -555,19 +553,19 @@ json_node<T>* json_parse_type(const string& json, size_t& pos) {
 			case 't': //boolean true
 				if (json.compare(pos+1, 3, "rue") == 0) {
 					pos += 4;
-					return new json_boolean<T>(true);
+					return new json_boolean<>(true);
 				}
 				return nullptr;
 			case 'f': //boolean false
 				if (json.compare(pos+1, 4, "alse") == 0) {
 					pos += 5;
-					return new json_boolean<T>(false);
+					return new json_boolean<>(false);
 				}
 				return nullptr;
 			case 'n': //null
 				if (json.compare(pos+1, 3, "ull") == 0) {
 					pos += 4;
-					return new json_null<T>;
+					return new json_null<>;
 				}
 				return nullptr;
 			default: return nullptr;
@@ -576,11 +574,11 @@ json_node<T>* json_parse_type(const string& json, size_t& pos) {
 	return nullptr;
 }
 
-template <typename T = char>
-json_node<T>* json_parse(const string& json) {
+inline json_node<>* json_parse(const string& json) {
 	//utf8 BOM判定を省略
 	const unsigned char* bom = (unsigned char*)json.c_str();
 	size_t pos = (json.size() >= 3 && bom[0] == 0xEF && bom[1] == 0xBB && bom[2] == 0xBF) ? 3 : 0;
-	return json_parse_type<T>(json, pos);
+	string e_temp;
+	return _json_parse_type(json, pos, e_temp);
 }
 #endif //_JSON_HPP
