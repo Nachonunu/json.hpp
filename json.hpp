@@ -27,70 +27,68 @@ template <typename T> class json_boolean;
 template <typename T> class json_null;
 
 //通常文字列からJSON文字列へのエスケープ処理
-inline string _json_escape_encode(const string& text) {
-	string out = "";
-	for (size_t i = 0; i < text.size(); i++) {
-		switch (out[i]) {
-			case '\"': out += "\\\"";  break;
-			case '\\': out += "\\\\";  break;
-			case '/':  out += "\\/";   break;
-			case '\b': out += "\\b";   break;
-			case '\f': out += "\\f";   break;
-			case '\n': out += "\\n";   break;
-			case '\r': out += "\\r";   break;
-			case '\t': out += "\\t";   break;
-			default:   out += text[i]; break;
+inline void _json_escape_encode(const string& text, string& out) {
+	for (char it : text) {
+		switch (it) {
+			case '\"': out += "\\\""; break;
+			case '\\': out += "\\\\"; break;
+			case '/':  out += "\\/";  break;
+			case '\b': out += "\\b";  break;
+			case '\f': out += "\\f";  break;
+			case '\n': out += "\\n";  break;
+			case '\r': out += "\\r";  break;
+			case '\t': out += "\\t";  break;
+			default:   out += it;     break;
 		}
 	}
-	return out;
 }
 //JSON文字列から通常文字列へのエスケープ処理
-inline string _json_escape_decode(const string& json, size_t& pos, string& temp) {
+inline string _json_escape_decode(const string& json, size_t& pos, string& out) {
 	unsigned long utf32;
-	temp = "";
+	out = "";
 	while (pos < json.size()) {
-		if (json[pos] == '\"') { ++pos; return temp; }
+		if (json[pos] == '\"') { ++pos; return out; }
 		else if (json[pos] == '\\') {
 			//エスケープ処理
 			++pos;
-			if (pos >= json.size()) return temp;
+			if (pos >= json.size()) return out;
 			switch (json[pos]) {
-				case '\"': temp += '\"'; ++pos; break;
-				case '\\': temp += '\\'; ++pos; break;
-				case '/':  temp += '/';  ++pos; break;
-				case 'b':  temp += '\b'; ++pos; break;
-				case 'f':  temp += '\f'; ++pos; break;
-				case 'n':  temp += '\n'; ++pos; break;
-				case 'r':  temp += '\r'; ++pos; break;
-				case 't':  temp += '\t'; ++pos; break;
+				case '\"': out += '\"'; ++pos; break;
+				case '\\': out += '\\'; ++pos; break;
+				case '/':  out += '/';  ++pos; break;
+				case 'b':  out += '\b'; ++pos; break;
+				case 'f':  out += '\f'; ++pos; break;
+				case 'n':  out += '\n'; ++pos; break;
+				case 'r':  out += '\r'; ++pos; break;
+				case 't':  out += '\t'; ++pos; break;
 				case 'u':
 					//utf-8に変換
 					++pos;
-					if (pos+4 >= json.size()) return temp; //error
+					if (pos+4 >= json.size()) return out; //error
 					utf32 = stoul(json.substr(pos, 4), nullptr, 16); //unsinged long に変換
 					if (utf32 <= 0x007F) { //1byte
-						temp += (char)utf32;
+						out += (char)utf32;
 					} else if (utf32 >= 0x0080 && utf32 <= 0x07FF) { //2byte
-						temp += (char)(0xC0 | ((utf32 & 0x7C0) >> 6));
-						temp += (char)(0x80 |  (utf32 & 0x3F));
+						out += (char)(0xC0 | ((utf32 & 0x7C0) >> 6));
+						out += (char)(0x80 |  (utf32 & 0x3F));
 					} else if (utf32 >= 0x0800 && utf32 <= 0xFFFF) { //3byte
-						temp += (char)(0xE0 | ((utf32 & 0xF000) >> 12));
-						temp += (char)(0x80 | ((utf32 & 0xFC0) >> 6));
-						temp += (char)(0x80 |  (utf32 & 0x3F));
+						out += (char)(0xE0 | ((utf32 & 0xF000) >> 12));
+						out += (char)(0x80 | ((utf32 & 0xFC0) >> 6));
+						out += (char)(0x80 |  (utf32 & 0x3F));
 					} else if (utf32 >= 0x10000 && utf32 <= 0x1FFFFF) { //4byte
-						temp += (char)(0xF0 | ((utf32 & 0x1C0000) >> 18));
-						temp += (char)(0x80 | ((utf32 & 0x3F000) >> 12));
-						temp += (char)(0x80 | ((utf32 & 0xFC0) >> 6));
-						temp += (char)(0x80 |  (utf32 & 0x3F));
-					} else return temp; //error 未定義
+						out += (char)(0xF0 | ((utf32 & 0x1C0000) >> 18));
+						out += (char)(0x80 | ((utf32 & 0x3F000) >> 12));
+						out += (char)(0x80 | ((utf32 & 0xFC0) >> 6));
+						out += (char)(0x80 |  (utf32 & 0x3F));
+					} else return out; //error 未定義
 					pos += 4;
 					break;
-				default: return temp;
+				default: return out;
 			}
-		} else if (json[pos] >= ' ' || json[pos] < '\a') { temp += json[pos]; ++pos; }
-		else return temp;
+		} else if (json[pos] >= ' ' || json[pos] < '\a') { out += json[pos]; ++pos; }
+		else return out;
 	}
-	return temp;
+	return out;
 }
 
 template <typename T = char>
@@ -110,7 +108,8 @@ public:
 	virtual ~json_node() {}
 	virtual json_type type() { return None; }
 	json_node<T>* parent() { return n_parent; }
-	virtual string print(const string& indentstr = "\t", const int indent = 0) { return ""; }
+	virtual void _print(string& out, const string& indentstr, const int indent) { return; }
+	virtual string print(const int indent = 1, const string& indentstr = "\t") { return ""; }
 	virtual json_node<T>* get_object(const string& key) { return nullptr; }
 	virtual json_node<T>* get_array(const size_t num) { return nullptr; }
 	virtual string get_string() { return ""; }
@@ -158,24 +157,41 @@ public:
 		delete_all();
 		if (n_parent != nullptr) *n_parent_pos = nullptr; //親ノードとの連結を解除
 	}
-	string print(const string& indentstr = "\t", const int indent = 0) {
+	void _print(string& out, const string& indentstr, const int indent) {
 		//JSONテキスト出力
-		string out, indenttext;
-		int last;
 		out += "{";
-		if (indent >= 0) {
-			for (int i = 0; i < indent+1; i++) indenttext += indentstr;
+		if (indent > 0) {
 			out += "\n";
-			last = 2;
-			for (auto it : nodelist)
-				if (*it.second != nullptr) out += indenttext + "\"" + _json_escape_encode(it.first) + "\" : " + (*it.second)->print(indentstr, indent+1) + ",\n";
+			for (auto it : nodelist) {
+				if (*it.second != nullptr) {
+					for (int i = 0; i < indent; ++i) out += indentstr;
+					out += "\"";
+					_json_escape_encode(it.first, out);
+					out += "\" : ";
+					(*it.second)->_print(out, indentstr, indent+1);
+					out += ",\n";
+				}
+			}
+			out.erase(out.end() - 2); //","を削除
+			for (int i = 0; i < indent-1; ++i) out += indentstr;
 		} else {
-			last = 1;
-			for (auto it : nodelist)
-				if (*it.second != nullptr) out += "\"" + _json_escape_encode(it.first) + "\":" + (*it.second)->print(indentstr, -1) + ",";
+			for (auto it : nodelist) {
+				if (*it.second != nullptr) {
+					out += "\"";
+					_json_escape_encode(it.first, out);
+					out += "\":";
+					(*it.second)->_print(out, indentstr, 0);
+					out += ",";
+				}
+			}
+			out.pop_back(); //","を削除
 		}
-		out.erase(out.end() - last);
-		out += indenttext.substr(0, indent * indentstr.size()) + "}";
+		out += "}";
+		return;
+	}
+	string print(const int indent = 1, const string& indentstr = "\t") {
+		string out;
+		_print(out, indentstr, indent);
 		return out;
 	}
 	json_type type() { return Object; }
@@ -248,25 +264,35 @@ public:
 		delete_all();
 		if (n_parent != nullptr) *n_parent_pos = nullptr; //親ノードとの連結を解除
 	}
-	string print(const string& indentstr = "\t", const int indent = 0) {
+	void _print(string& out, const string& indentstr, const int indent) {
 		//指定されたノードを取得
-		string out, indenttext;
-		int last;
 		out += "[";
-		if (indent >= 0) {
-			for (int i = 0; i < indent+1; i++) indenttext += indentstr;
+		if (indent > 0) {
 			out += "\n";
-			last = 2;
-		} else last = 1;
-		if (indent >= 0) {
-			for (json_node<T>** n : nodelist)
-				if (*n != nullptr) out += indenttext + (*n)->print(indentstr, indent+1) + ",\n";
+			for (json_node<T>** n : nodelist) {
+				if (*n != nullptr) {
+					for (int i = 0; i < indent; ++i) out += indentstr;
+					(*n)->_print(out, indentstr, indent+1);
+					out += ",\n";
+				}
+			}
+			out.erase(out.end() - 2); //","を削除
+			for (int i = 0; i < indent-1; ++i) out += indentstr;
 		} else {
-			for (json_node<T>** n : nodelist)
-				if (*n != nullptr) out += (*n)->print(indentstr, -1) + ",";
+			for (json_node<T>** n : nodelist) {
+				if (*n != nullptr) {
+					(*n)->_print(out, indentstr, 0);
+					out += ",";
+				}
+			}
+			out.pop_back(); //","を削除
 		}
-		out.erase(out.end() - last);
-		out += indenttext.substr(0, indent * indentstr.size()) + "]";
+		out += "]";
+		return;
+	}
+	string print(const int indent = 1, const string& indentstr = "\t") {
+		string out;
+		_print(out, indentstr, indent);
 		return out;
 	}
 	json_type type() { return Array; }
@@ -357,7 +383,18 @@ public:
 	json_string() { reset_parent(); }
 	json_string(const string& arg) { reset_parent(); v = arg; }
 	~json_string() { if (n_parent != nullptr) *n_parent_pos = nullptr; } //親ノードとの連結を解除
-	string print(const string& indentstr = "\t", const int indent = 0) { return "\"" + _json_escape_encode(v) + "\""; }
+	void _print(string& out, const string& indentstr, const int indent) {
+		out += "\"";
+		_json_escape_encode(v, out);
+		out += "\"";
+	}
+	string print(const int indent = 1, const string& indentstr = "\t") {
+		string out;
+		out += "\"";
+		_json_escape_encode(v, out);
+		out += "\"";
+		return out;
+	}
 	json_type type() { return String; }
 	string get_string() { return v; }
 	double get_number() { return stod(v); }
@@ -380,7 +417,8 @@ public:
 	json_number() { reset_parent(); v = 0; }
 	json_number(double arg) { reset_parent(); v = arg; }
 	~json_number() { if (n_parent != nullptr) *n_parent_pos = nullptr; }
-	string print(const string& indentstr = "\t", const int indent = 0) { return to_string(v); }
+	void _print(string& out, const string& indentstr, const int indent) { out += to_string(v); }
+	string print(const int indent = 1, const string& indentstr = "\t") { return to_string(v); }
 	json_type type() { return Number; }
 	string get_string() { return to_string(v); }
 	double get_number() { return v; }
@@ -403,7 +441,8 @@ public:
 	json_boolean() { reset_parent(); v = false; }
 	json_boolean(bool arg) { reset_parent(); v = arg; }
 	~json_boolean() { if (n_parent != nullptr) *n_parent_pos = nullptr; } //親ノードとの連結を解除
-	string print(const string& indentstr = "\t", const int indent = 0) { return v ? "true" : "false"; }
+	void _print(string& out, const string& indentstr, const int indent) { out += v ? "true" : "false"; }
+	string print(const int indent = 1, const string& indentstr = "\t") { return v ? "true" : "false"; }
 	json_type type() { return Boolean; }
 	string get_string() { return v ? "true" : "false"; }
 	double get_number() { return v ? 1 : 0; }
@@ -424,7 +463,8 @@ class json_null : public json_node<T> {
 public:
 	json_null() { reset_parent(); }
 	~json_null() { if (n_parent != nullptr) *n_parent_pos = nullptr; } //親ノードとの連結を解除
-	string print(const string& indentstr = "\t", const int indent = 0) { return "null"; }
+	void _print(string& out, const string& indentstr, const int indent) { out += "null"; }
+	string print(const int indent = 1, const string& indentstr = "\t") { return "null"; }
 	json_type type() { return Null; }
 };
 
